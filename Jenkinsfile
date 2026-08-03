@@ -6,11 +6,29 @@ pipeline {
         IMAGE_TAG = "latest"
     }
 
+    tools {
+        sonarScanner 'SonarScanner'
+    }
+
     stages {
 
         stage('Checkout') {
             steps {
                 checkout scm
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('SonarQube') {
+                    dir('app') {
+                        sh '''
+                        sonar-scanner \
+                        -Dsonar.projectKey=DevSecOps-Threat-Detection \
+                        -Dsonar.sources=. \
+                        '''
+                    }
+                }
             }
         }
 
@@ -33,7 +51,6 @@ pipeline {
                     usernameVariable: 'DOCKER_USER',
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
-
                     sh '''
                     echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
                     docker push $IMAGE_NAME:$IMAGE_TAG
@@ -41,6 +58,5 @@ pipeline {
                 }
             }
         }
-
     }
 }
