@@ -6,10 +6,6 @@ pipeline {
         IMAGE_TAG = "latest"
     }
 
-    tools {
-        sonarScanner 'SonarScanner'
-    }
-
     stages {
 
         stage('Checkout') {
@@ -20,13 +16,16 @@ pipeline {
 
         stage('SonarQube Analysis') {
             steps {
-                withSonarQubeEnv('SonarQube') {
-                    dir('app') {
-                        sh '''
-                        sonar-scanner \
-                        -Dsonar.projectKey=DevSecOps-Threat-Detection \
-                        -Dsonar.sources=. \
-                        '''
+                script {
+                    def scannerHome = tool 'SonarScanner'
+                    withSonarQubeEnv('SonarQube') {
+                        dir('app') {
+                            sh """
+                            ${scannerHome}/bin/sonar-scanner \
+                            -Dsonar.projectKey=DevSecOps-Threat-Detection \
+                            -Dsonar.sources=.
+                            """
+                        }
                     }
                 }
             }
