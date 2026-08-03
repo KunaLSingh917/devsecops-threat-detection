@@ -57,7 +57,17 @@ pipeline {
                 }
             }
         }
-
+	stage('Debug Kubernetes') {
+    	    steps {
+        	sh '''
+        	whoami
+        	echo "HOME=$HOME"
+        	echo "KUBECONFIG=$KUBECONFIG"
+        	kubectl config view
+        	kubectl get nodes
+        	'''
+    }
+}
         stage('Deploy to Kubernetes') {
             steps {
                 sh '''
