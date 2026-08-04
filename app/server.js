@@ -1,8 +1,10 @@
 const express = require("express");
-const unusedVariable = "SonarQube Demo";
 const app = express();
 
 const PORT = 3000;
+
+// SonarQube Demo (Intentional Security Hotspot)
+const password = "admin123";
 
 app.get("/", (req, res) => {
     res.send(`
