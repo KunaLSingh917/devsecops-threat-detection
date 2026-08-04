@@ -1,5 +1,5 @@
 const express = require("express");
-
+const unusedVariable = "SonarQube Demo";
 const app = express();
 
 const PORT = 3000;
