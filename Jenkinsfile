@@ -31,6 +31,7 @@ pipeline {
                                     ${scannerHome}/bin/sonar-scanner \
                                     -Dsonar.projectKey=DevSecOps-Threat-Detection \
                                     -Dsonar.sources=. \
+                                    -Dsonar.exclusions=node_modules/** \
                                     -Dsonar.token=\$SONAR_TOKEN
                                 """
                             }
@@ -43,9 +44,14 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 sh '''
+                    echo "===== Building Docker Image ====="
+
                     docker build \
-                    -t $IMAGE_NAME:$IMAGE_TAG \
-                    ./app
+                        --no-cache \
+                        -t $IMAGE_NAME:$IMAGE_TAG \
+                        ./app
+
+                    docker images | grep devsecops-threat-detection
                 '''
             }
         }
@@ -53,7 +59,11 @@ pipeline {
         stage('Trivy Image Scan') {
             steps {
                 sh '''
-                    trivy image $IMAGE_NAME:$IMAGE_TAG
+                    echo "===== Trivy Security Scan ====="
+
+                    trivy image \
+                        --severity HIGH,CRITICAL \
+                        $IMAGE_NAME:$IMAGE_TAG
                 '''
             }
         }
@@ -68,32 +78,36 @@ pipeline {
                     )
                 ]) {
                     sh '''
+                        echo "===== Docker Hub Login ====="
+
                         echo "$DOCKER_PASS" | docker login \
                             -u "$DOCKER_USER" \
                             --password-stdin
 
+                        echo "===== Pushing Image ====="
+
                         docker push $IMAGE_NAME:$IMAGE_TAG
+
+                        echo "===== Image Push Completed ====="
                     '''
                 }
             }
         }
 
-        stage('Debug Kubernetes') {
+        stage('Kubernetes Debug') {
             steps {
                 sh '''
                     echo "===== Kubernetes Debug ====="
-                    whoami
-                    echo "HOME=$HOME"
-                    echo "KUBECONFIG=$KUBECONFIG"
 
-                    echo "===== Kubernetes Config ====="
-                    kubectl config view
-
-                    echo "===== Kubernetes Nodes ====="
                     kubectl get nodes
 
-                    echo "===== DevSecOps Pods ====="
-                    kubectl get pods -n devsecops
+                    echo "===== Current DevSecOps Pods ====="
+
+                    kubectl get pods -n devsecops -o wide
+
+                    echo "===== Current Deployment ====="
+
+                    kubectl get deployment devsecops-app -n devsecops
                 '''
             }
         }
@@ -101,26 +115,58 @@ pipeline {
         stage('Deploy to Kubernetes') {
             steps {
                 sh '''
-                    echo "===== Deploying Application ====="
+                    echo "===== Deploying Kubernetes Resources ====="
 
                     kubectl apply -f kubernetes/namespace.yaml
                     kubectl apply -f kubernetes/deployment.yaml
                     kubectl apply -f kubernetes/service.yaml
 
-                    echo "===== Deployment Status ====="
+                    echo "===== Forcing New Image Pull ====="
+
+                    kubectl rollout restart \
+                        deployment/devsecops-app \
+                        -n devsecops
+
+                    echo "===== Waiting For Rollout ====="
 
                     kubectl rollout status \
                         deployment/devsecops-app \
                         -n devsecops \
-                        --timeout=120s
+                        --timeout=180s
 
-                    echo "===== Application Pods ====="
+                    echo "===== Deployment Complete ====="
 
-                    kubectl get pods -n devsecops
+                    kubectl get pods \
+                        -n devsecops \
+                        -o wide
 
-                    echo "===== Application Service ====="
+                    echo "===== Service ====="
 
-                    kubectl get svc -n devsecops
+                    kubectl get svc \
+                        -n devsecops
+                '''
+            }
+        }
+
+        stage('Verify Application') {
+            steps {
+                sh '''
+                    echo "===== Application Verification ====="
+
+                    sleep 5
+
+                    curl -I \
+                        --max-time 10 \
+                        http://10.0.2.101:30080
+
+                    echo "===== Application HTML Check ====="
+
+                    curl -s \
+                        --max-time 10 \
+                        http://10.0.2.101:30080 \
+                        | grep -E \
+                        "Falco Version|Syscall Events|Rule Matches" \
+                        || true
                 '''
             }
         }
@@ -159,20 +205,45 @@ pipeline {
     }
 
     post {
+
         success {
-            echo '======================================'
-            echo ' DevSecOps Pipeline SUCCESS'
-            echo '======================================'
+            echo '''
+========================================
+ DevSecOps Pipeline SUCCESS
+========================================
+ GitHub
+    ↓
+ Jenkins
+    ↓
+ SonarQube
+    ↓
+ Trivy
+    ↓
+ Docker Build
+    ↓
+ Docker Hub
+    ↓
+ Kubernetes
+    ↓
+ OWASP ZAP
+    ↓
+ Falco + Prometheus + Grafana
+========================================
+'''
         }
 
         failure {
-            echo '======================================'
-            echo ' DevSecOps Pipeline FAILED'
-            echo '======================================'
+            echo '''
+========================================
+ DevSecOps Pipeline FAILED
+========================================
+Check the failed stage above.
+========================================
+'''
         }
 
         always {
-            echo 'Pipeline execution completed.'
+            echo "Pipeline execution completed."
         }
     }
 }
