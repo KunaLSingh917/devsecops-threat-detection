@@ -1,12 +1,189 @@
 const express = require("express");
+const k8s = require("@kubernetes/client-node");
 const app = express();
 
 const PORT = 3000;
 
+const kc = new k8s.KubeConfig();
+
+try {
+    kc.loadFromCluster();
+} catch (e) {
+    kc.loadFromDefault();
+}
+
+const coreApi = kc.makeApiClient(k8s.CoreV1Api);
+const appsApi = kc.makeApiClient(k8s.AppsV1Api);
+
+const PROMETHEUS_URL =
+    process.env.PROMETHEUS_URL ||
+    "http://monitoring-kube-prometheus-prometheus.monitoring.svc:9090";
+
+async function promQuery(query) {
+    try {
+        const url = PROMETHEUS_URL + "/api/v1/query?query=" +
+            encodeURIComponent(query);
+
+        const response = await fetch(url);
+
+        if (!response.ok) {
+            return null;
+        }
+
+        const json = await response.json();
+
+        if (
+            json.status !== "success" ||
+            !json.data ||
+            !json.data.result ||
+            json.data.result.length === 0
+        ) {
+            return null;
+        }
+
+        return Number(json.data.result[0].value[1]);
+    } catch (error) {
+        console.log("Prometheus query failed:", error.message);
+        return null;
+    }
+}
+
+async function getDashboardData() {
+    const data = {
+        application: "UNKNOWN",
+        kubernetes: "UNKNOWN",
+        deployment: "UNKNOWN",
+        runtimeSecurity: "UNKNOWN",
+        systemStatus: "UNKNOWN",
+        controlPlane: "UNKNOWN",
+        workerNode: "UNKNOWN",
+        applicationPods: "0",
+        falco: "UNKNOWN",
+        threatAlerts: 0,
+        runningPods: 0,
+        falcoEvents: 0
+    };
+
+    try {
+        const deployment =
+            await appsApi.readNamespacedDeployment(
+                "devsecops-app",
+                "devsecops"
+            );
+
+        const replicas =
+            deployment.body.status?.replicas || 0;
+
+        const available =
+            deployment.body.status?.availableReplicas || 0;
+
+        data.application =
+            available > 0 ? "RUNNING" : "DOWN";
+
+        data.deployment =
+            available >= replicas && replicas > 0
+                ? "SUCCESS"
+                : "DEPLOYING";
+
+    } catch (error) {
+        console.log("Deployment check failed:", error.message);
+        data.application = "DOWN";
+        data.deployment = "FAILED";
+    }
+
+    try {
+        const pods =
+            await coreApi.listNamespacedPod("devsecops");
+
+        const podList = pods.body.items || [];
+
+        const running =
+            podList.filter(
+                p => p.status?.phase === "Running"
+            ).length;
+
+        data.runningPods = running;
+        data.applicationPods = String(running);
+
+        data.kubernetes =
+            running > 0 ? "READY" : "NOT READY";
+
+    } catch (error) {
+        console.log("Pod check failed:", error.message);
+    }
+
+    try {
+        const nodes = await coreApi.listNode();
+
+        const readyNodes = (nodes.body.items || []).filter(node => {
+            const conditions = node.status?.conditions || [];
+
+            return conditions.some(
+                c => c.type === "Ready" && c.status === "True"
+            );
+        });
+
+        data.controlPlane =
+            readyNodes.length > 0 ? "READY" : "NOT READY";
+
+        data.workerNode =
+            readyNodes.length > 0 ? "READY" : "NOT READY";
+
+    } catch (error) {
+        console.log("Node check failed:", error.message);
+    }
+
+    const falcoUp =
+        await promQuery('up{job="falco-metrics"}');
+
+    const falcoEvents =
+        await promQuery(
+            'sum(rate(falcosecurity_scap_n_evts_total[5m]))'
+        );
+
+    const threatAlerts =
+        await promQuery(
+            'sum(increase(falcosecurity_falco_rules_matches_total[1h]))'
+        );
+
+    data.falco =
+        falcoUp === null
+            ? "UNKNOWN"
+            : falcoUp > 0
+                ? "MONITORING"
+                : "DOWN";
+
+    data.runtimeSecurity =
+        data.falco === "MONITORING"
+            ? "ACTIVE"
+            : "INACTIVE";
+
+    data.threatAlerts =
+        threatAlerts === null
+            ? 0
+            : Math.round(threatAlerts);
+
+    data.falcoEvents =
+        falcoEvents === null
+            ? 0
+            : Math.round(falcoEvents);
+
+    data.systemStatus =
+        data.application === "RUNNING" &&
+        data.kubernetes === "READY" &&
+        data.falco === "MONITORING"
+            ? "ALL SYSTEMS OPERATIONAL"
+            : "CHECK REQUIRED";
+
+    return data;
+}
+
+
 // SonarQube Demo (Intentional Security Hotspot)
 const password = "admin123";
 
-app.get("/", (req, res) => {
+app.get("/", async (req, res) => {
+const data = await getDashboardData();
     res.send(`
 <!DOCTYPE html>
 <html>
@@ -184,7 +361,7 @@ app.get("/", (req, res) => {
 
         <div class="status">
             🟢 System Status:
-            <span>ALL SYSTEMS OPERATIONAL</span>
+            <span>${data.systemStatus}</span>
         </div>
 
         <div class="cards">
