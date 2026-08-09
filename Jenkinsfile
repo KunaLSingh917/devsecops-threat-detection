@@ -32,7 +32,7 @@ pipeline {
                                     -Dsonar.projectKey=DevSecOps-Threat-Detection \
                                     -Dsonar.sources=. \
                                     -Dsonar.exclusions=node_modules/** \
-                                    -Dsonar.token=\$SONAR_TOKEN
+                                    -Dsonar.token=\\$SONAR_TOKEN
                                 """
                             }
                         }
@@ -51,6 +51,8 @@ pipeline {
                         -t $IMAGE_NAME:$IMAGE_TAG \
                         ./app
 
+                    echo "===== Docker Image Built ====="
+
                     docker images | grep devsecops-threat-detection
                 '''
             }
@@ -64,6 +66,8 @@ pipeline {
                     trivy image \
                         --severity HIGH,CRITICAL \
                         $IMAGE_NAME:$IMAGE_TAG
+
+                    echo "===== Trivy Scan Completed ====="
                 '''
             }
         }
@@ -84,7 +88,7 @@ pipeline {
                             -u "$DOCKER_USER" \
                             --password-stdin
 
-                        echo "===== Pushing Image ====="
+                        echo "===== Pushing Docker Image ====="
 
                         docker push $IMAGE_NAME:$IMAGE_TAG
 
@@ -99,14 +103,13 @@ pipeline {
                 sh '''
                     echo "===== Kubernetes Debug ====="
 
+                    echo "===== Nodes ====="
                     kubectl get nodes
 
                     echo "===== Current DevSecOps Pods ====="
-
                     kubectl get pods -n devsecops -o wide
 
                     echo "===== Current Deployment ====="
-
                     kubectl get deployment devsecops-app -n devsecops
                 '''
             }
@@ -136,14 +139,11 @@ pipeline {
 
                     echo "===== Deployment Complete ====="
 
-                    kubectl get pods \
-                        -n devsecops \
-                        -o wide
+                    kubectl get pods -n devsecops -o wide
 
-                    echo "===== Service ====="
+                    echo "===== Kubernetes Service ====="
 
-                    kubectl get svc \
-                        -n devsecops
+                    kubectl get svc -n devsecops
                 '''
             }
         }
@@ -159,7 +159,7 @@ pipeline {
                         --max-time 10 \
                         http://10.0.2.101:30080
 
-                    echo "===== Application HTML Check ====="
+                    echo "===== Dynamic Dashboard Verification ====="
 
                     curl -s \
                         --max-time 10 \
@@ -167,6 +167,8 @@ pipeline {
                         | grep -E \
                         "Falco Version|Syscall Events|Rule Matches" \
                         || true
+
+                    echo "===== Application Verification Completed ====="
                 '''
             }
         }
@@ -176,11 +178,13 @@ pipeline {
                 sh '''
                     echo "===== OWASP ZAP DAST Scan ====="
 
-                    rm -f zap-report.html
+                    rm -rf zap-work
+                    mkdir -p zap-work
+                    chmod 777 zap-work
 
                     docker run --rm \
                         --network host \
-                        -v "$WORKSPACE:/zap/wrk:rw" \
+                        -v "$WORKSPACE/zap-work:/zap/wrk:rw" \
                         ghcr.io/zaproxy/zaproxy:stable \
                         zap-baseline.py \
                         -t http://10.0.2.101:30080 \
@@ -189,14 +193,21 @@ pipeline {
 
                     echo "===== ZAP Scan Completed ====="
 
-                    ls -lh zap-report.html || true
+                    echo "===== ZAP Files ====="
+                    ls -lah zap-work || true
+
+                    if [ -f zap-work/zap-report.html ]; then
+                        echo "===== ZAP HTML REPORT CREATED ====="
+                    else
+                        echo "===== ZAP HTML REPORT NOT FOUND ====="
+                    fi
                 '''
             }
 
             post {
                 always {
                     archiveArtifacts(
-                        artifacts: 'zap-report.html',
+                        artifacts: 'zap-work/zap-report.html',
                         allowEmptyArchive: true
                     )
                 }
@@ -209,25 +220,32 @@ pipeline {
         success {
             echo '''
 ========================================
- DevSecOps Pipeline SUCCESS
+       DEVSECOPS PIPELINE SUCCESS
 ========================================
- GitHub
-    ↓
- Jenkins
-    ↓
- SonarQube
-    ↓
- Trivy
-    ↓
- Docker Build
-    ↓
- Docker Hub
-    ↓
- Kubernetes
-    ↓
- OWASP ZAP
-    ↓
- Falco + Prometheus + Grafana
+
+GitHub
+   |
+   v
+Jenkins
+   |
+   +----> SonarQube
+   |
+   +----> Docker Build
+   |
+   +----> Trivy
+   |
+   +----> Docker Hub
+   |
+   +----> Kubernetes
+   |
+   +----> OWASP ZAP
+   |
+   +----> Falco
+   |
+   +----> Prometheus
+   |
+   +----> Grafana
+
 ========================================
 '''
         }
@@ -235,7 +253,7 @@ pipeline {
         failure {
             echo '''
 ========================================
- DevSecOps Pipeline FAILED
+       DEVSECOPS PIPELINE FAILED
 ========================================
 Check the failed stage above.
 ========================================
@@ -243,7 +261,7 @@ Check the failed stage above.
         }
 
         always {
-            echo "Pipeline execution completed."
+            echo 'Pipeline execution completed.'
         }
     }
 }
