@@ -460,7 +460,7 @@ const data = await getDashboardData();
 
             <div class="card">
                 <h3>Kubernetes</h3>
-                <div class="number green">READY</div>
+                <div class="number blue">0</div>
             </div>
 
             <div class="card">
@@ -470,7 +470,7 @@ const data = await getDashboardData();
 
             <div class="card">
                 <h3>Runtime Security</h3>
-                <div class="number green">ACTIVE</div>
+                <div class="number blue">0</div>
             </div>
 
         </div>
@@ -533,81 +533,97 @@ const data = await getDashboardData();
 
         <div class="section">
 
-            <h2>🛡️ Security & Monitoring</h2>
+        <h2>🛡️ Security & Monitoring</h2>
 
-            <div class="services">
+        <div class="cards">
 
-                <div class="service">
-                    <strong>SonarQube</strong>
-                    <span class="green">● Active</span>
-                    <p>Static Code Analysis</p>
-                </div>
+            <div class="card">
+                <h3>Falco Version</h3>
+                <div class="number blue">${data.falcoVersion}</div>
+                <p>Runtime security engine</p>
+            </div>
 
-                <div class="service">
-                    <strong>Trivy</strong>
-                    <span class="green">● Active</span>
-                    <p>Container Vulnerability Scanning</p>
-                </div>
+            <div class="card">
+                <h3>Falco Engine</h3>
+                <div class="number blue">${data.falcoEngine}</div>
+                <p>Event capture engine</p>
+            </div>
 
-                <div class="service">
-                    <strong>Falco</strong>
-                    <span class="green">● Active</span>
-                    <p>Runtime Threat Detection</p>
-                </div>
+            <div class="card">
+                <h3>Syscall Events</h3>
+                <div class="number green">${Number(data.falcoSyscallEvents).toLocaleString()}</div>
+                <p>Total captured events</p>
+            </div>
 
-                <div class="service">
-                    <strong>Prometheus</strong>
-                    <span class="green">● Active</span>
-                    <p>Cluster Metrics Collection</p>
-                </div>
+            <div class="card">
+                <h3>Event Rate</h3>
+                <div class="number green">${Number(data.falcoEventRate).toLocaleString()}</div>
+                <p>Events per second</p>
+            </div>
 
-                <div class="service">
-                    <strong>Grafana</strong>
-                    <span class="green">● Active</span>
-                    <p>Monitoring & Visualization</p>
-                </div>
+            <div class="card">
+                <h3>Rule Matches</h3>
+                <div class="number red">${Number(data.falcoRuleMatches).toLocaleString()}</div>
+                <p>Triggered Falco rules</p>
+            </div>
 
-                <div class="service">
-                    <strong>Docker Hub</strong>
-                    <span class="green">● Active</span>
-                    <p>Container Image Registry</p>
-                </div>
+            <div class="card">
+                <h3>Dropped Events</h3>
+                <div class="number ${data.falcoDroppedEvents > 0 ? "red" : "green"}">${Number(data.falcoDroppedEvents).toLocaleString()}</div>
+                <p>Events dropped</p>
+            </div>
 
+            <div class="card">
+                <h3>Falco Runtime</h3>
+                <div class="number blue">${Number(data.falcoDuration).toLocaleString()}s</div>
+                <p>Monitoring duration</p>
+            </div>
+
+            <div class="card">
+                <h3>Alerts / Hour</h3>
+                <div class="number red">${Number(data.threatAlerts).toLocaleString()}</div>
+                <p>Rule alerts in last hour</p>
             </div>
 
         </div>
 
-        <div class="section">
+    </div>
 
-            <h2>☸️ Kubernetes Cluster</h2>
+    <div class="section">
 
-            <div class="cards">
+        <h2>☸️ Kubernetes Cluster</h2>
 
-                <div class="card">
-                    <h3>Control Plane</h3>
-                    <div class="number green">READY</div>
-                </div>
+        <div class="cards">
 
-                <div class="card">
-                    <h3>Worker Node</h3>
-                    <div class="number green">READY</div>
-                </div>
+            <div class="card">
+                <h3>Ready Nodes</h3>
+                <div class="number green">${data.controlPlane === "READY" ? 1 : 0}</div>
+                <p>Kubernetes nodes</p>
+            </div>
 
-                <div class="card">
-                    <h3>Application Pods</h3>
-                    <div class="number blue">RUNNING</div>
-                </div>
+            <div class="card">
+                <h3>Running Pods</h3>
+                <div class="number blue">${Number(data.runningPods).toLocaleString()}</div>
+                <p>Currently running</p>
+            </div>
 
-                <div class="card">
-                    <h3>Falco</h3>
-                    <div class="number green">MONITORING</div>
-                </div>
+            <div class="card">
+                <h3>Application Pods</h3>
+                <div class="number blue">${Number(data.applicationPods).toLocaleString()}</div>
+                <p>DevSecOps application</p>
+            </div>
 
+            <div class="card">
+                <h3>Falco Alerts</h3>
+                <div class="number red">${Number(data.threatAlerts).toLocaleString()}</div>
+                <p>Last 1 hour</p>
             </div>
 
         </div>
 
-        <div class="section">
+    </div>
+
+    <div class="section">
 
             <h2>📊 Project Components</h2>
 
