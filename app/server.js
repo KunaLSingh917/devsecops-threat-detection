@@ -48,6 +48,34 @@ async function promQuery(query) {
     }
 }
 
+
+async function promMetric(query) {
+    try {
+        const url = PROMETHEUS_URL + "/api/v1/query?query=" +
+            encodeURIComponent(query);
+
+        const response = await fetch(url);
+
+        if (!response.ok) return null;
+
+        const json = await response.json();
+
+        if (
+            json.status !== "success" ||
+            !json.data ||
+            !json.data.result ||
+            json.data.result.length === 0
+        ) {
+            return null;
+        }
+
+        return json.data.result[0];
+    } catch (error) {
+        console.log("Prometheus metric query failed:", error.message);
+        return null;
+    }
+}
+
 async function getDashboardData() {
     const data = {
         application: "UNKNOWN",
@@ -61,7 +89,15 @@ async function getDashboardData() {
         falco: "UNKNOWN",
         threatAlerts: 0,
         runningPods: 0,
-        falcoEvents: 0
+        falcoEvents: 0,
+
+        falcoVersion: "N/A",
+        falcoEngine: "N/A",
+        falcoSyscallEvents: 0,
+        falcoDroppedEvents: 0,
+        falcoRuleMatches: 0,
+        falcoDuration: 0,
+        falcoEventRate: 0
     };
 
     try {
@@ -136,7 +172,33 @@ async function getDashboardData() {
     const falcoUp =
         await promQuery('up{job="falco-metrics"}');
 
-    const falcoEvents =
+    const falcoVersion =
+        await promMetric('falcosecurity_falco_version_info');
+
+    const falcoEngine =
+        await promMetric('falcosecurity_scap_engine_name_info');
+
+    const syscallEvents =
+        await promQuery(
+            'falcosecurity_scap_n_evts_total'
+        );
+
+    const droppedEvents =
+        await promQuery(
+            'falcosecurity_scap_n_drops_total'
+        );
+
+    const ruleMatches =
+        await promQuery(
+            'sum(falcosecurity_falco_rules_matches_total)'
+        );
+
+    const duration =
+        await promQuery(
+            'falcosecurity_falco_duration_seconds_total'
+        );
+
+    const eventRate =
         await promQuery(
             'sum(rate(falcosecurity_scap_n_evts_total[5m]))'
         );
@@ -147,16 +209,10 @@ async function getDashboardData() {
         );
 
     data.falco =
-        falcoUp === null
-            ? "UNKNOWN"
-            : falcoUp > 0
-                ? "MONITORING"
-                : "DOWN";
+        falcoUp === null ? "N/A" : falcoUp;
 
     data.runtimeSecurity =
-        data.falco === "MONITORING"
-            ? "ACTIVE"
-            : "INACTIVE";
+        falcoUp === null ? 0 : falcoUp;
 
     data.threatAlerts =
         threatAlerts === null
@@ -164,9 +220,40 @@ async function getDashboardData() {
             : Math.round(threatAlerts);
 
     data.falcoEvents =
-        falcoEvents === null
+        syscallEvents === null
             ? 0
-            : Math.round(falcoEvents);
+            : Math.round(syscallEvents);
+
+    data.falcoVersion =
+        falcoVersion?.metric?.version || "N/A";
+
+    data.falcoEngine =
+        falcoEngine?.metric?.engine_name || "N/A";
+
+    data.falcoSyscallEvents =
+        syscallEvents === null
+            ? 0
+            : Math.round(syscallEvents);
+
+    data.falcoDroppedEvents =
+        droppedEvents === null
+            ? 0
+            : Math.round(droppedEvents);
+
+    data.falcoRuleMatches =
+        ruleMatches === null
+            ? 0
+            : Math.round(ruleMatches);
+
+    data.falcoDuration =
+        duration === null
+            ? 0
+            : Math.round(duration);
+
+    data.falcoEventRate =
+        eventRate === null
+            ? 0
+            : Math.round(eventRate);
 
     data.systemStatus =
         data.application === "RUNNING" &&
