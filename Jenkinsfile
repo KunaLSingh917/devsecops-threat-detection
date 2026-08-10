@@ -1,6 +1,10 @@
 pipeline {
     agent any
 
+    triggers {
+	pollsSCM("H/ * * * *')
+    }
+
     environment {
         IMAGE_NAME = "kunalsingh7/devsecops-threat-detection"
         IMAGE_TAG = "latest"
