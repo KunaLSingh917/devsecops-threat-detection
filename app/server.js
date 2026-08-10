@@ -275,7 +275,7 @@ const data = await getDashboardData();
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Enterprise DevSecOps Platform</title>
+    <title>Enterprise DevSecOps Platform v2 v2</title>
 
     <style>
         * {
@@ -440,7 +440,7 @@ const data = await getDashboardData();
 <body>
 
     <div class="header">
-        <h1>Enterprise DevSecOps Platform</h1>
+        <h1>Enterprise DevSecOps Platform v2 v2</h1>
         <p>Kubernetes Threat Detection & Continuous Delivery Dashboard</p>
     </div>
 
@@ -641,7 +641,7 @@ const data = await getDashboardData();
     </div>
 
     <div class="footer">
-        Enterprise DevSecOps Platform | Kubernetes Threat Detection
+        Enterprise DevSecOps Platform v2 v2 | Kubernetes Threat Detection
     </div>
 
 </body>
