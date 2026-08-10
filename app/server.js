@@ -268,6 +268,9 @@ async function getDashboardData() {
 
 // SonarQube Demo (Intentional Security Hotspot)
 const password = "admin123";
+const demoDatabasePassword = "DemoPassword123!";
+const unusedDemoVariable = "SONARQUBE-DEMO";
+
 
 app.get("/", async (req, res) => {
 const data = await getDashboardData();
